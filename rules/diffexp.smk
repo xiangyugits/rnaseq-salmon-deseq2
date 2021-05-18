@@ -5,16 +5,24 @@ diff_Name='{contrast}'
 
 rule deseq2:
     input:
-        quant_rds=join(quant_dir,'txi.rds')
+        quant_files = expand(join(quant_dir,'{sample}','quant.sf'),
+               sample=samples.Sample),
     output:
-        table=report(join(diff_dir,"{contrast}.diffexp.tsv"), join(report_dir,"diffexp.rst")),
-        ma_plot=report(join(diff_dir,"{contrast}.ma-plot.svg"), join(report_dir,"ma.rst")),
+        deseq2_rds=join(diff_dir,diff_Name+'.deseq2.rds'),
+        deseq2_res=join(diff_dir,diff_Name+'.DESeq2_res.tsv'),
+        deseq2_exp=join(diff_dir,diff_Name+'.DESeq2_exp.tsv')
     params:
-        contrast = get_contrast,
-        meta = config['meta']
+        contrast =get_contrast,
+        meta = config['meta'],
+        Name=diff_Name,
+        gtf=config['ref']['annotation'],
+        outdir=directory(diff_dir)
     threads: global_thread
     log:
-        join(log_dir,"deseq2","{contrast}.diffexp.log")
+        join(log_dir,"deseq2",diff_Name+".deseq2.log")
+    script:
+        "../scripts/deseq2.R"
+
 
 rule output:
     input:
@@ -26,8 +34,7 @@ rule output:
     params:
         contrast =get_contrast,
         Name=diff_Name,
-        anno_db=config["ref"]["anno_db"],
-        #outdir=directory(diff_dir),
+        outdir=directory(diff_dir),
         logFC_threshold=config["diffexp"]['logFC_threshold'],
         padj_threshold=config["diffexp"]['padj_threshold'],        
     log:

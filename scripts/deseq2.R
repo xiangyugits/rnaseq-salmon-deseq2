@@ -49,7 +49,7 @@ if (!all(file.exists(files))){
   print(files)
 }
 
-save.image()
+#save.image()
 
 
 txi <- tximport(files, type="salmon", tx2gene=tx2gene,ignoreTxVersion=T)

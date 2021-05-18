@@ -5,10 +5,7 @@
 流程管理 : **snakemake**
 
 
-# 2.方案
-
-
-## 2.1 主要软件
+# 2 主要软件
 
 
 | 软件            | 版本 | 功能         |
@@ -16,7 +13,6 @@
 | mulitqc         |      | 数据质控     |
 | salmon          |      | RNA-Seq 定量 |
 | DEseq2          |      | 差异分析     |
-
 
 
 
@@ -41,11 +37,15 @@
 │   ├── 01_qc
 │   ├── 02_quant
 │   ├── 03_diffexp
+│   ├── 04_wgcna
+│   └── 05_enrich
 ├── rules        #各部分流程snakefile  
 │   ├── qc.smk
 │   ├── quant.smk
 │   ├── diffexp.smk
-
+│   ├── wgcna.smk
+│   ├── enrich.smk
+│   └── report.smk
 ├── scripts      #存储python R脚本
 └── Snakefile    #main snakefile
 ```

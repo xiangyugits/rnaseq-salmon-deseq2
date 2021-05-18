@@ -19,6 +19,7 @@ qc_dir=join(work_dir,'01_qc')
 quant_dir=os.path.join(work_dir,'02_quant')
 diff_dir=join(work_dir,'03_diffexp')
 
+
 global_thread=config['threads']
 
 ##### target rules #####
@@ -41,6 +42,7 @@ rule all:
         expand(join(report_dir,'{contrast}'+".DE.report.html"),
                contrast=config["diffexp"]["contrasts"]),
        
+
 ##### load rules #####
 
 include: "rules/qc.smk"
