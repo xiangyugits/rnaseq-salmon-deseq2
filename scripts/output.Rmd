@@ -1,0 +1,382 @@
+---
+title: "Differential Expression Analysis Report"
+author:
+    - "Xiangyu Zhou"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+params:
+   rmd: "deseq2.Rmd"
+output:
+  html_document:
+  number_sections: yes
+  toc: yes
+  toc_depth: 3
+  toc_float:
+    collapsed: no
+    smooth_scroll: yes
+---
+
+```{r setup,echo=FALSE, include=FALSE,eval=TRUE}
+
+knitr::opts_chunk$set(eval=TRUE,echo = FALSE,warning=FALSE,message=FALSE,fig.height=6, fig.width=8,fig.align='center')
+
+
+
+```
+
+
+```{r eval=FALSE}
+htmltools::tags$script(src = "https://code.jquery.com/jquery-3.5.1.js")
+htmltools::tags$script(src = "https://cdn.datatables.net/1.10.22/js/jquery.dataTables.min.js")
+
+<style type="text/css">
+@import url("https://cdn.datatables.net/1.10.22/css/jquery.dataTables.min.css");
+</style>
+```
+
+
+```{js eval=FALSE}
+/* Custom filtering function which will search data in column four between two values */
+$.fn.dataTable.ext.search.push(
+	function( settings, data, dataIndex ) {
+		var TlogFC = parseFloat( $('#TlogFC').val(), 1 );
+		var Tpadj = parseFloat( $('#Tpadj').val(), 0.5 );
+		var logFC = Math.abs(parseFloat( data[3] )) || 0; // use data for the age column
+    var padj = parseFloat( data[6] ) || 1; // use data for the age column
+
+		if ( ( isNaN( TlogFC ) && isNaN( Tpadj ) ) ||
+			 ( isNaN( TlogFC ) && padj <= Tpadj ) ||
+			 ( TlogFC <= logFC   && isNaN( Tpadj ) ) ||
+			 ( TlogFC <= logFC   && padj <= Tpadj ) )
+		{
+			return true;
+		}
+		return false;
+	}
+);
+
+$(document).ready(function() {
+    var table = $('#mytable').DataTable();
+    // Event listener to the two range filtering inputs to redraw on input
+    $('#TlogFC, #Tpadj').keyup(function() {
+        table.draw();
+    } );
+} );
+```
+
+
+
+
+```{r eval=TRUE}
+log <- file(snakemake@log[[1]], open="wt")
+sink(log)
+sink(log, type="message")
+
+options(StringAsFactor = F)
+options("digits" = 3)
+options(pillar.sigfig=3)
+library(ggpubr)
+library(pheatmap)
+library(DESeq2)
+library(apeglm)
+library(tidyverse)
+library(rtracklayer)
+library(dplyr)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+```
+
+```{r eval=TRUE}
+ndds<-read_rds(snakemake@input[['deseq2_rds']])
+res<-read_tsv(snakemake@input[['deseq2_res']])
+exp<-read_tsv(snakemake@input[['deseq2_exp']])
+
+logFC_threshold <- snakemake@params[['logFC_threshold']]
+padj_threshold <- snakemake@params[['padj_threshold']]
+
+
+#输出
+outdir<-snakemake@params[['outdir']]
+Name <-snakemake@params[['Name']]
+
+if (!file.exists(outdir)){
+  dir.create(outdir)} 
+outdir<-paste0(outdir,'/')
+DEG_res=paste0(outdir,Name,'.DEG_res.tsv')
+DEG_exp_file=paste0(outdir,Name,'.DEG_exp.tsv')
+ma_fig=paste0(outdir,Name,'.maplot.svg')
+volcano_fig=paste0(outdir,Name,'.volcano.svg')
+heatmap_fig=paste0(outdir,Name,'.heatmap.svg')
+pca_fig=paste0(outdir,Name,'.pca.svg')
+go_fig1=paste0(outdir,Name,'.GO.barplot.svg')
+go_fig2=paste0(outdir,Name,'.GO.dotplot.svg')
+
+```
+
+
+# 差异分析(`r Name`)
+
+## 基本信息
+
+```{r eval=TRUE}
+
+if (length(resultsNames(ndds))>2){
+    test<-'LRT'
+}else{
+    test<-'Wald'
+}
+
+meta<-colData(ndds)%>%
+    as.data.frame()
+knitr::kable(meta,caption='样品信息')
+```
+
+<br/>
+
+## 分析结果
+
+```{r}
+#res%>%
+#  drop_na()%>%
+#  mutate_if(is.numeric, ~round(., 3)) %>%
+#  DT::datatable(filter = 'top', options = list(autoWidth = TRUE))
+```
+<br/>
+
+
+## 结果可视化
+
+可视化结果基于以下筛选阈值
+
+- **log2FoldChange:** `r logFC_threshold`
+- **padj:**  `r padj_threshold`
+<br/>
+
+```{r}
+res%>%
+  arrange(desc(abs(log2FoldChange))) %>%
+  drop_na() %>%
+  dplyr::filter(padj<padj_threshold,abs(log2FoldChange)>logFC_threshold)%>%
+  mutate_if(is.numeric, ~round(., 3)) %>%
+  DT::datatable(filter = 'top', options = list(autoWidth = TRUE))
+```
+- **baseMean**; This is the avarage of the counts for a particular gene from the different samples.
+- **log2FoldChange**; this is basically the log-ratio of a gene's or transcript's expression values in 2 different conditions. 
+- **lfcSE**; this is just the standard error in determining the DE signifince level of a particular gene.
+- **stat**; is the Wald Statistic
+- **pvalue**; this is the raw p-value indicating how significant a gene is differentially expressed. 
+- **padj**; this is the adjusted pvalue after applying the Benjamini-Hochberg (BH) adjustment for multiple comparisons.
+
+
+```{r eval=TRUE}
+#筛选结果
+if (test=='Wald'){
+DEG<-res%>%
+  dplyr::filter(padj<padj_threshold,abs(log2FoldChange)>logFC_threshold)%>%
+  arrange(padj)%>%
+  as.data.frame()
+
+} else{
+#LRT
+deggene<-res%>%
+  dplyr::filter(padj<padj_threshold,abs(log2FoldChange)>logFC_threshold)%>%
+  arrange(padj)%>%
+  distinct(gene)
+DEG=res[res$gene%in%deggene$gene,]
+}
+
+DEG_exp=as.data.frame(exp[exp$gene%in%DEG$gene,])
+
+write_tsv(DEG,DEG_res)
+write_tsv(DEG_exp,DEG_exp_file)
+```
+
+
+### PCA
+
+PCA图，将各个样品的定量结果降维，样品差异越大、距离越远。该图用于质控，查看同组样品是否会聚集在一起。
+```{r,fig.height=4.5}
+quant<-exp%>%
+    dplyr::select(-gene,-gene_name)%>%
+    as.data.frame()
+p2<- prcomp(t(quant))
+pca_data <- predict(p2)
+pdata=pca_data[,c('PC1','PC2','PC3')]%>%
+    as.data.frame()%>%
+    cbind(meta)
+fig<-ggscatter(pdata, x = "PC1", y = "PC2",color = "Condition",size =4,shape="Group",
+    palette = 'jco',ellipse = F, mean.point = F,star.plot = F,label='Sample',
+    ggtheme = ggplot2::theme_minimal())
+#ggsave(pca_fig,plot=fig)
+fig
+```
+
+### MA-plot
+
+Y-axis：log2 fold changes (M)
+
+X-axis:the average expression signal (A)
+
+MAplot 通过查看基因的平均表达量与差异倍数分布情况，从整体可视化差异分析结果。
+
+```{r}
+df<-res%>%
+  mutate(log10padj =-log10(res$padj))
+
+fc_threshold=2**logFC_threshold
+fig<-ggmaplot(df,fdr = padj_threshold , fc = fc_threshold , #差异阈值的设定
+         size = 0.6, #点的大小
+         palette = c("#B31B21", "#1465AC", "darkgray"),
+         genenames = as.vector(df$gene_name),
+         xlab = "A",ylab = "M",
+         legend = "top", 
+         top = 10, #选择展示的top基因数目
+         font.label = c("bold", 10),label.rectangle = TRUE,
+         font.legend = "bold",select.top.method = "fc",
+         font.main = "bold",
+         ggtheme = ggplot2::theme_minimal()
+         )
+#ggsave(ma_fig,plot=fig)
+fig
+```
+
+### volcano plot
+
+Y-axis: log10padj
+
+X-axis: log2FoldChange
+
+火山图 ,查看padj与差异倍数的分布情况，通过筛选标准的结果被不同颜色标记，用于展示差异结果及确定筛选阈值是否合理。
+```{r}
+df<-res%>%
+    mutate(log10padj =-log10(res$padj))%>%
+    arrange(desc(abs(log2FoldChange)))%>%
+    drop_na()
+df$significant <- 'unchanged' 
+df$significant[df$padj < padj_threshold & df$log2FoldChange > logFC_threshold] <-'upregulated'
+df$significant[df$padj < padj_threshold & df$log2FoldChange < -logFC_threshold] <-'downregulated' 
+
+xMax <- 10
+yMax <- 10
+
+fig<-ggscatter(df, 
+          x = "log2FoldChange", 
+          y = "log10padj", 
+          #ylim=c(0,yMax), xlim=c(-xMax,xMax),
+          ylab = "-log10(padj)",
+          title = 'volcano plot',
+          legend = "right",
+          color = "significant",
+          size = 0.8,
+          label = "gene_name", 
+          repel = T,
+          show.legend.text = F,
+          palette = c("#00AFBB", "#999999", "#FC4E07") ,
+          label.select = df$gene_name[1:20])+  # 筛选需要标注的基因
+          theme(plot.title = element_text(hjust = 0.5))
+#ggsave(volcano_fig,plot=fig)
+fig
+
+
+#save.image()
+
+```
+
+### heatmap plot
+
+Y-axis: Gene
+
+X-axis: Sample
+
+color : scaled Gene expression
+
+热图，根据基因表达量将差异基因结果进行聚类，查看差异基因表达模式以及样品的聚类情况。
+```{r fig.height=9}
+if (dim(DEG)[1]>2){
+df<-DEG_exp%>%
+  distinct(gene_name,.keep_all=TRUE)%>%
+  drop_na()
+rownames(df)<-df$gene_name
+df<-df%>%
+  dplyr::select(-gene,-gene_name)
+fig<-pheatmap(df,annotation = meta[,c('Group','Condition')],
+        scale="row",   # z-score处理
+        color = colorRampPalette(c('blue','white','red'))(50),    # 低、中、高表达的颜色
+        cluster_cols = T,   # 样品是否聚类
+        cluster_rows = T,
+        show_colnames = T,
+        show_rownames = F,
+        fontsize = 8,       # 字体大小     
+        fontsize_row = 8, fontsize_col = 6,main='Gene count heatmap')
+#ggsave(heatmap_fig,plot=fig)
+fig}else{
+  print("差异基因过少")
+}
+```
+
+```{r fig.height=9}
+if (test=='LRT' && dim(DEG)[1]>0){
+
+df<-DEG%>%
+    distinct(gene_name,contrast,.keep_all=TRUE)%>%
+    dplyr::select(gene_name,log2FoldChange,contrast)%>%
+    distinct(gene_name,contrast,.keep_all=TRUE)%>%
+    pivot_wider(names_from='contrast',values_from ='log2FoldChange')%>%
+    #pivot_wider(names_from='contrast',values_from ='log2FoldChange',values_fill = list(log2FoldChange = 0))%>%
+    as.data.frame()%>%
+    drop_na(gene_name)
+rownames(df)=df$gene_name
+df=df[,-1]
+
+paletteLength <- 50
+myBreaks <- c(seq(min(df), 0, length.out=ceiling(paletteLength/2) + 1), 
+              seq(max(df)/paletteLength, max(df), length.out=floor(paletteLength/2)))
+fig<-pheatmap(df,
+        border_color=F,
+        color = colorRampPalette(c('blue','white','red'))(50),    # 低、中、高表达的颜色
+        scale='row',
+        cluster_cols = F,   # 样品是否聚类
+        cluster_rows = T,
+        show_colnames = T,
+        show_rownames = F,
+        fontsize = 8,       # 字体大小     
+        fontsize_row = 8, fontsize_col = 10,
+        main='Fold Change(log2) heatmap')
+fig
+}
+```
+
+
+# GO富集分析
+
+```{r fig.width=12,fig.align='left'}
+if (dim(DEG)[1]>0){
+deggene<-DEG%>%
+  drop_na()
+ego_ALL <- enrichGO(gene          = deggene$gene_name,
+                   OrgDb         = 'org.Hs.eg.db',
+                   keyType       = 'SYMBOL',
+                   ont           = "ALL",
+                   pAdjustMethod = "BH",
+                   pvalueCutoff  = 0.1,
+                   qvalueCutoff  = 0.1)
+
+if(!is.null(ego_ALL)){
+fig<-barplot(ego_ALL,showCategory=30,font.size=10)
+#ggsave(go_fig1,plot=fig)
+fig}
+}
+```
+
+
+```{r fig.width=12,fig.align='left'}
+if (dim(DEG)[1]>0){
+if(!is.null(ego_ALL)){
+fig=dotplot(ego_ALL,showCategory=30,font.size=10)
+#ggsave(go_fig2,plot=fig)
+fig}else{
+  print('无显著结果')
+}
+}
+```
+
+

@@ -1,0 +1,41 @@
+$schema: "http://json-schema.org/draft-06/schema#"
+
+description: snakemake configuration file
+
+type: object
+
+properties:
+  PROJECT:
+    type: string
+  PERSON:
+    type: string
+  LIBRARYINFO:
+    type: string  
+  
+  meta:
+    type: string
+  samples:
+    type: string
+  DATA_dir:
+    type: string
+  working_dir:
+    type: string
+  report_dir:
+    type: string
+  log_dir:
+    type: string  
+
+
+  ref:
+    type: object
+    properties:
+      index:
+        type: string
+      annotation:
+        type: string
+    
+
+required:
+  - samples
+  - meta
+  - ref

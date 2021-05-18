@@ -1,0 +1,68 @@
+#项目名称
+PROJECT: tumor
+
+#项目负责人
+PERSON: test
+
+#实验、文库信息
+LIBRARYINFO: None 
+
+####################
+# 输入输出
+####################
+
+#分组信息表
+meta: /home/zhangli_lab/zhouxiangyu/DATA/projects/WJL_20201102/meta.tsv
+
+#数据信息表
+samples: /home/zhangli_lab/zhouxiangyu/DATA/projects/WJL_20201102/samples.tsv
+
+#数据路径
+DATA_DIR: /home/zhangli_lab/zhouxiangyu/DATA/projects/WJL_20201102/fastq/
+
+#输出路径
+working_dir: /home/zhangli_lab/zhouxiangyu/DATA/projects/WJL_20201102/result/ #工作目录
+report_dir: /home/zhangli_lab/zhouxiangyu/DATA/projects/WJL_20201102/report/  #报告路径
+log_dir: /home/zhangli_lab/zhouxiangyu/DATA/projects/WJL_20201102/logs/
+
+
+####################
+# 分析参数
+####################
+
+threads: 5
+
+#参考基因信息
+ref: 
+  species: "human"
+  # 转录组fasta文件
+  trans_fasta: "/home/zhangli_lab/zhouxiangyu/DATA/Ref/hg38/Homo_sapiens.GRCh38.cdna.all.fa.gz"
+  # 注释文件
+  annotation: "/home/zhangli_lab/zhouxiangyu/DATA/Ref/hg38/Homo_sapiens.GRCh38.95.chr.gtf"
+  
+
+
+# 按照设定的对照来进行差异分析,按照第一个condition为ref
+# 如果condition数目大于2，则按照时间序列来分析。
+diffexp:
+  logFC_threshold: 1
+  padj_threshold: 0.1
+  contrasts:
+    tissue_T-vs-P:
+      - ZST
+      - ZSP
+    exosome_T-vs-N:
+      - N
+      - T
+    exosome_M-vs-N:
+      - N
+      - M
+    exosome_H-vs-N:
+      - N
+      - H
+    Time_series:
+      - N
+      - M
+      - H
+      - T      
+
