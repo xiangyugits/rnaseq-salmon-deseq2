@@ -37,15 +37,10 @@
 │   ├── 01_qc
 │   ├── 02_quant
 │   ├── 03_diffexp
-│   ├── 04_wgcna
-│   └── 05_enrich
 ├── rules        #各部分流程snakefile  
 │   ├── qc.smk
 │   ├── quant.smk
 │   ├── diffexp.smk
-│   ├── wgcna.smk
-│   ├── enrich.smk
-│   └── report.smk
 ├── scripts      #存储python R脚本
 └── Snakefile    #main snakefile
 ```
